@@ -245,24 +245,29 @@ summary(model.avg(dredge_1, subset = delta < 6)) # if you just want to look only
 ```{r I guess we should make a figure, echo=FALSE, fig.height=10, fig.width=4}
 w1 <- ggplot(orch, aes(cropland, richness)) + 
   geom_point() +
-  geom_smooth(method="lm")
+  geom_smooth(method="lm") +
+  labs(x = "Cropland Area (m²)")
   #scale_x_continuous(limits = c(0, 700))
 
 w2 <- ggplot(orch, aes(elevation, richness)) + 
   geom_point() +
-  geom_smooth(method="lm")
+  geom_smooth(method="lm") +
+  labs(x = "Elevation (m)")
 
 w3 <- ggplot(orch, aes(population, richness)) + 
   geom_point() +
-  geom_smooth(method="lm")
+  geom_smooth(method="lm") +
+  labs(x = "Pop. density per km²")
 
 w4 <- ggplot(orch, aes(MAT, richness)) + 
   geom_point() +
-  geom_smooth(method="lm")
+  geom_smooth(method="lm") +
+  labs(x = "Mean Annual Temp. (C)")
 
 w5 <- ggplot(orch, aes(MAP, richness)) + 
   geom_point() +
-  geom_smooth(method="lm")
+  geom_smooth(method="lm") +
+  labs(x = "Mean Annual Precip. (mm)")
 
 w1 / w2 / w3 / w4 / w5 #patchwork notation for figure alignment
 
