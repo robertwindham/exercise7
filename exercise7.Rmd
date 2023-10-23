@@ -1,0 +1,277 @@
+---
+title: "Exercise 7 - Model Selection"
+author: "Robert Windham"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  toc_depth: 4
+  number_sections: true
+  theme: united
+  self_contained: true
+  df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+packages_needed <- c("ggplot2", # graphics
+                     "dplyr",
+                     "lme4", # display() etc.
+                     "lmerTest", #gives us P-values
+                     "MuMIn", #models selection
+                     "asbio", #Washburn data
+                     "GGally", #to make pairs plot
+                     "performance", #model diagnostics
+                     "patchwork",
+                     "olsrr"
+                     )
+pk_to_install <- packages_needed [!( packages_needed %in% rownames(installed.packages())  )]
+if(length(pk_to_install)>0 ){
+  install.packages(pk_to_install,repos="http://cran.r-project.org")
+}
+#lapply(packages_needed, require, character.only = TRUE)
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(lmerTest)
+library(ggfortify)
+library(MuMIn)
+library(asbio)
+library(GGally)
+library(performance)
+library(patchwork)
+library(olsrr)
+library(leaflet)
+
+```
+
+```{r include = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r adjust width of console outputs, include=FALSE}
+#many of our tables output in the console are really wide; expand limits [width] to fit them all in,
+#otherwise they wrap awkwardly
+options(width = 90)
+#https://bookdown.org/yihui/rmarkdown-cookbook/text-width.html
+
+#matrix(runif(100), ncol = 20) #test code to display adjusted width
+```
+
+
+
+
+```{r import crayfish data, message=FALSE, warning=FALSE, include=FALSE}
+orch <- read.csv("species_richness_env.csv")
+
+orch <- select(orch, c('Code', 'richness', 'MAT', 'MAP', 'ER', 'population', 'AOC'))
+               
+orch <- rename(orch,
+               elevation = ER,
+               cropland = AOC)
+                             
+
+```
+
+
+
+
+# Orchid species richness
+
+
+
+
+
+**This dataset is looking at the species richness of orchid flora and their response to 30 different environmental factors in 3500 grid cells in the Beipan River Basin in Guizhou Province. For this exercise I selected species richness as the response variable and mean annual temperature, mean annual precipitation, elevation, human population density, and area of cropland as predictor variables.**
+
+
+
+![Figure 1. *Dendrobium officinale*](images/chinaorchid.jpg)
+
+![Figure 2. Chinese Ground Orchid (*Bletilla striata*)](images/chinaorchid2.jpg)
+
+
+
+```{r Study area map, echo=FALSE, warning=FALSE}
+leaflet() %>%
+  setView(106.142542, 24.946307, zoom = 2.8) %>%
+  addTiles() %>%
+  addMarkers(106.142542, 24.946307, popup = "Beipan River Basin")
+
+```
+
+
+
+
+
+
+
+
+
+
+# Colinearity
+
+
+
+```{r check for colinearity, echo=FALSE, fig.height=8, fig.width=8, message=FALSE, warning=FALSE}
+ggpairs(orch, columns = 3:7) + theme_bw()
+```
+
+
+
+**We have a high correlation between Mean Annual Temperature and Mean Annual Precipitation, as expected. There is relatively low correlation between the other variables.**
+
+
+
+```{r fitmodel to look at Variance Inflation Factor, echo=TRUE}
+model_1 <- lm(richness ~ MAT + MAP + elevation + population + cropland, data=orch)
+anova (model_1) #coefficients of the full model
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+olsrr::ols_plot_added_variable(model_1)
+```
+
+
+
+
+
+## Multicolinearity Check
+
+
+
+```{r check model for multicolinearity, echo=FALSE}
+performance::check_collinearity(model_1)
+#VIF are also translated to Tolerance values, where tolerance = 1/vif
+```
+
+**Since all variables have a Variance Inflation Factor less than 5, we can conclude that there is a low correlation between the predictor variables.**
+
+
+
+
+# Model Performance
+
+
+
+```{r check model, echo=FALSE, fig.height=8}
+performance::check_model(model_1)
+```
+
+
+# Possible Models
+
+
+
+```{r fit dredge model, echo=FALSE}
+# change na. action
+options(na.action = "na.fail") # otherwise blows up with NA values
+dredge_1<-dredge(model_1)
+
+dredge_1
+```
+
+
+**There are 32 possible models based on additive combinations of variables (no interaction terms).**
+
+
+
+## Best Models
+
+
+
+```{r best subset, echo=FALSE}
+# grab best supported models
+subset(dredge_1, delta < 6)
+```
+
+
+```{r equally-competitve models, echo=FALSE}
+#grab equally competitive models
+subset(dredge_1, delta <2)
+```
+
+
+## Variable Importance Weights
+
+
+
+```{r echo=FALSE}
+# calculate variable importance weights
+sw(dredge_1) #notice this is the global model, not just the competitive model set
+```
+
+**We can see that area of cropland, elevation, mean annual precipitation, and human population density are all equally important. Mean annual temperature is less important, but it should still be considered.**
+
+
+
+
+# Model Averaging
+
+
+
+```{r Model Averaging, echo=FALSE}
+# Model average using all candidate models, always use revised.var = TRUE
+model.avg(dredge_1, revised.var = TRUE)
+```
+
+
+
+
+
+```{r look at the averaged coefficients, echo=TRUE}
+#summary(model.avg(dredge_wash)) # if you want to average across all models, both competitive and non-competitive
+summary(model.avg(dredge_1, subset = delta < 6)) # if you just want to look only at competitive models, which
+#is the point of model selection.
+#there is justification for looking only at the competitive models; trying to narrow things down.
+```
+
+
+
+# Plots
+
+
+
+```{r I guess we should make a figure, echo=FALSE, fig.height=10, fig.width=4}
+w1 <- ggplot(orch, aes(cropland, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+  #scale_x_continuous(limits = c(0, 700))
+
+w2 <- ggplot(orch, aes(elevation, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w3 <- ggplot(orch, aes(population, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w4 <- ggplot(orch, aes(MAT, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w5 <- ggplot(orch, aes(MAP, richness)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+
+w1 / w2 / w3 / w4 / w5 #patchwork notation for figure alignment
+
+```
+
+
+
+
+**Unsure why there are negative values for species richness. When including human population density as a predictive effect, we would want to use a different error structure because the prediction line becomes negative for population densities above 50,000 people per square kilometer**
+
+
+
